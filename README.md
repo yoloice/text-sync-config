@@ -1,1 +1,0 @@
-# text-sync-config
