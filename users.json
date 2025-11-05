@@ -1,0 +1,9 @@
+{
+  "users": {
+    "user_001": {
+      "api_key": "key_001_abc123def456",
+      "created_at": "2024-01-01",
+      "status": "active"
+    }
+  }
+}
