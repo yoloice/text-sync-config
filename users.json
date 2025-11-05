@@ -1,7 +1,7 @@
 {
   "users": {
-    "user_001": {
-      "api_key": "key12345",
+    "user001": {
+      "api_key": "key123", 
       "created_at": "2024-01-01",
       "status": "active"
     }
