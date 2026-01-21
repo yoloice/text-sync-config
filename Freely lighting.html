@@ -1,0 +1,561 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            background: #000000 !important;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            position: fixed;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        /* 授权提示遮罩 */
+        #permissionMask {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 20000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #ddd;
+            text-align: center;
+            padding: 30px;
+            backdrop-filter: blur(5px);
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #permissionMask.visible {
+            visibility: visible;
+            opacity: 1;
+        }
+        #permissionMask h3 {
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        #permissionMask p {
+            margin-bottom: 30px;
+            line-height: 1.5;
+            max-width: 300px;
+        }
+        #requestPermissionBtn {
+            background: #2a5ca7;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #requestPermissionBtn:active {
+            background: #1e4a8a;
+        }
+        /* 倒计时提示 */
+        #countdownText {
+            margin-top: 25px;
+            font-size: 14px;
+            color: #888;
+        }
+        /* 长按反馈圆环 */
+        #pressRing {
+            position: fixed;
+            pointer-events: none;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            opacity: 0;
+            transform: scale(0);
+            transition: opacity 0.3s, transform 0.3s;
+            z-index: 9998;
+        }
+        #pressRing.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+        /* 隐藏的控制面板 */
+        #controlPanel {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(25, 25, 25, 0.97);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 25px;
+            color: white;
+            text-align: center;
+            z-index: 10000;
+            display: none;
+            min-width: 260px;
+            backdrop-filter: blur(10px);
+        }
+        #controlPanel.active { display: block; }
+        .control-btn {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ddd;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 14px;
+            margin: 8px 0;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        .control-btn:active { background: rgba(255, 255, 255, 0.15); }
+        .control-btn.primary { 
+            background: #2a5ca7; 
+            border-color: #2a5ca7;
+            color: white;
+        }
+        .control-btn.warning { 
+            background: rgba(200, 100, 0, 0.7); 
+            border-color: rgba(200, 100, 0, 0.5);
+            color: white;
+        }
+        .control-btn.success { 
+            background: rgba(0, 150, 0, 0.7); 
+            border-color: rgba(0, 150, 0, 0.5);
+            color: white;
+        }
+        /* 状态指示灯 */
+        #statusLed {
+            position: fixed;
+            bottom: 18px; right: 18px;
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #111;
+            z-index: 9999;
+        }
+        #statusLed.active {
+            background: #ff9900;
+            box-shadow: 0 0 8px #ff9900;
+        }
+        /* 监听状态指示灯 */
+        #listeningLed {
+            position: fixed;
+            bottom: 18px; right: 32px;
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #0a6;
+            z-index: 9999;
+            opacity: 0.7;
+            box-shadow: 0 0 5px #0a6;
+        }
+        #listeningLed.inactive {
+            background: #666;
+            box-shadow: none;
+        }
+        /* 配置错误提示 */
+        #configError {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(180, 40, 40, 0.95);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 10001;
+            display: none;
+            border: 1px solid #a02a2a;
+            max-width: 80%;
+        }
+    </style>
+</head>
+<body>
+    <!-- 授权提示遮罩 -->
+    <div id="permissionMask">
+        <h3>📸 权限请求</h3>
+        <p>请允许访问摄像头，以使用手电筒（闪光灯）功能。此权限仅用于控制闪光灯，不会录制或保存任何影像。</p>
+        <button id="requestPermissionBtn">允许访问摄像头</button>
+        <div id="countdownText"></div>
+    </div>
+
+    <!-- 长按反馈圆环 -->
+    <div id="pressRing"></div>
+    <!-- 配置错误提示 -->
+    <div id="configError"></div>
+    <!-- 状态指示灯（手电筒） -->
+    <div id="statusLed"></div>
+    <!-- 监听状态指示灯 -->
+    <div id="listeningLed" class="inactive"></div>
+    <!-- 隐藏的控制面板 -->
+    <div id="controlPanel">
+        <div style="margin-bottom:18px; font-size:16px; font-weight:500;">控制面板</div>
+        
+        <!-- 手电筒控制 -->
+        <button class="control-btn primary" id="toggleBtn">开启手电筒</button>
+        
+        <!-- 监听控制 -->
+        <button class="control-btn warning" id="toggleListeningBtn">停止云监听</button>
+        
+        <!-- 其他功能 -->
+        <button class="control-btn" id="checkBtn">立即检查指令</button>
+        <button class="control-btn" id="closePanelBtn">关闭面板</button>
+        
+        <!-- 状态信息 -->
+        <div style="margin-top:15px; font-size:11px; color:#777; word-break:break-all;" id="configInfo"></div>
+        <div style="margin-top:8px; font-size:11px; color:#666;" id="listeningStatus">
+            云监听状态：<span id="listeningStatusText">运行中</span>
+        </div>
+    </div>
+
+    <script>
+        // ====================【从URL获取配置】====================
+        function getConfigFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return { 
+                fileId: params.get('file_id'), 
+                nodeId: params.get('node_id') 
+            };
+        }
+
+        // ====================【全局变量】====================
+        let DYNALIST_DOCUMENT_ID = null;
+        let TARGET_NODE_ID = null;
+        const DYNALIST_API_TOKEN = 'Uvkd-9_OhN3kJn_TLhB-yrxd4mHYnPZ-A1XPtM_66JkRAsx6VwnWtHaKhuD9RaLKEupSkxxALzqGcjZjs9fbkMBam6Z3AR_QTW9h5062CpayU-Rm58pbbBlp3qyaWNHo';
+        const CHECK_INTERVAL = 3000;
+        const TARGET_COMMAND = '打开手电筒';
+
+        let mediaStream = null;
+        let track = null;
+        let isFlashlightOn = false;
+        let checkIntervalId = null;
+        let isListeningActive = true;
+        let longPressTimer = null;
+        // 删除了跳转相关的定时器和变量
+
+        const permissionMask = document.getElementById('permissionMask');
+        const requestPermissionBtn = document.getElementById('requestPermissionBtn');
+        const countdownText = document.getElementById('countdownText');
+        const pressRing = document.getElementById('pressRing');
+        const configError = document.getElementById('configError');
+        const statusLed = document.getElementById('statusLed');
+        const listeningLed = document.getElementById('listeningLed');
+        const controlPanel = document.getElementById('controlPanel');
+        const configInfo = document.getElementById('configInfo');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const toggleListeningBtn = document.getElementById('toggleListeningBtn');
+        const checkBtn = document.getElementById('checkBtn');
+        const closePanelBtn = document.getElementById('closePanelBtn');
+        const listeningStatusText = document.getElementById('listeningStatusText');
+
+        // ====================【简化：监听控制函数】====================
+        function updateListeningStatus() {
+            if (isListeningActive) {
+                listeningLed.classList.remove('inactive');
+                toggleListeningBtn.textContent = '停止云监听';
+                toggleListeningBtn.className = 'control-btn warning';
+                listeningStatusText.textContent = '运行中';
+                listeningStatusText.style.color = '#0a6';
+            } else {
+                listeningLed.classList.add('inactive');
+                toggleListeningBtn.textContent = '开启云监听';
+                toggleListeningBtn.className = 'control-btn success';
+                listeningStatusText.textContent = '已停止';
+                listeningStatusText.style.color = '#999';
+            }
+        }
+
+        function stopListening() {
+            if (checkIntervalId) {
+                clearInterval(checkIntervalId);
+                checkIntervalId = null;
+                console.log('云监听已停止');
+            }
+            isListeningActive = false;
+            updateListeningStatus();
+            
+            // 简化：直接跳转，不显示倒计时
+            console.log('正在跳转到百度首页...');
+            window.location.href = 'https://www.baidu.com';
+        }
+
+        function startListening() {
+            if (!isListeningActive) return;
+            
+            checkAndExecuteCommand();
+            checkIntervalId = setInterval(checkAndExecuteCommand, CHECK_INTERVAL);
+            console.log('云监听已启动');
+        }
+
+        function toggleListening() {
+            isListeningActive = !isListeningActive;
+            
+            if (isListeningActive) {
+                startListening();
+            } else {
+                stopListening();
+            }
+            
+            updateListeningStatus();
+        }
+
+        // ====================【1. 检测摄像头权限状态】====================
+        async function checkCameraPermission() {
+            if (!navigator.permissions || !navigator.permissions.query) {
+                console.log('浏览器不支持权限状态查询');
+                return null;
+            }
+            try {
+                const permissionStatus = await navigator.permissions.query({ 
+                    name: 'camera' 
+                });
+                console.log('摄像头权限状态:', permissionStatus.state);
+                return permissionStatus.state;
+            } catch (error) {
+                console.log('查询权限状态失败:', error);
+                return null;
+            }
+        }
+
+        // ====================【2. 请求摄像头权限】====================
+        async function requestCameraPermission() {
+            if (!navigator.mediaDevices?.getUserMedia) {
+                alert('您的浏览器不支持摄像头访问。请使用 Chrome 或 Edge。');
+                return false;
+            }
+            try {
+                const testStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true
+                });
+                testStream.getTracks().forEach(track => track.stop());
+                console.log('✅ 摄像头权限已获取');
+                return true;
+            } catch (error) {
+                console.error('摄像头权限被拒绝:', error);
+                if (error.name === 'NotAllowedError') {
+                    alert('请允许摄像头权限以使用手电筒功能。您可能需要刷新页面重新授权。');
+                }
+                return false;
+            }
+        }
+
+        // ====================【3. 权限通过后的流程】====================
+        function startSystemAfterPermission() {
+            let countdown = 3;
+            countdownText.textContent = `系统准备中... ${countdown}秒`;
+            
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    countdownText.textContent = `系统准备中... ${countdown}秒`;
+                } else {
+                    clearInterval(countdownInterval);
+                    permissionMask.classList.remove('visible');
+                    finalSystemStart();
+                }
+            }, 1000);
+        }
+
+        // ====================【4. 系统最终启动】====================
+        function finalSystemStart() {
+            if (!initConfig()) return;
+            startListening();
+            updateListeningStatus();
+            console.log('🚀 系统已完全启动');
+        }
+
+        // ====================【5. 配置初始化】====================
+        function initConfig() {
+            const config = getConfigFromUrl();
+            DYNALIST_DOCUMENT_ID = config.fileId;
+            TARGET_NODE_ID = config.nodeId;
+
+            if (!DYNALIST_DOCUMENT_ID || !TARGET_NODE_ID) {
+                configError.innerHTML = `请提供URL参数：?file_id=文档ID&node_id=节点ID`;
+                configError.style.display = 'block';
+                return false;
+            }
+
+            configInfo.textContent = `配置：${DYNALIST_DOCUMENT_ID.substring(0,12)}... / ${TARGET_NODE_ID.substring(0,12)}...`;
+            return true;
+        }
+
+        // ====================【6. 智能启动入口】====================
+        async function smartStart() {
+            if (!initConfig()) return;
+
+            const permissionState = await checkCameraPermission();
+            
+            if (permissionState === 'granted') {
+                console.log('权限已授予，直接启动系统');
+                permissionMask.classList.remove('visible');
+                finalSystemStart();
+            } 
+            else if (permissionState === 'prompt' || permissionState === null) {
+                console.log('需要请求权限');
+                permissionMask.classList.add('visible');
+                
+                requestPermissionBtn.addEventListener('click', async () => {
+                    const granted = await requestCameraPermission();
+                    if (granted) {
+                        startSystemAfterPermission();
+                    }
+                });
+            } 
+            else if (permissionState === 'denied') {
+                console.log('权限已被拒绝');
+                permissionMask.innerHTML = `
+                    <h3>⚠️ 权限被拒绝</h3>
+                    <p>摄像头访问权限已被拒绝。请在浏览器设置中允许此网站的摄像头权限，然后刷新页面。</p>
+                    <p style="font-size:14px; color:#aaa; margin-top:20px;">
+                        通常可以在：<br>
+                        · 地址栏左侧的锁形图标<br>
+                        · 浏览器设置 → 网站设置 → 摄像头<br>
+                        中修改权限。
+                    </p>
+                `;
+                permissionMask.classList.add('visible');
+            }
+        }
+
+        // ====================【7. 长按检测】====================
+        document.addEventListener('touchstart', function(e) {
+            const touch = e.touches[0];
+            const x = touch.clientX;
+            const y = touch.clientY;
+
+            pressRing.style.left = (x - 50) + 'px';
+            pressRing.style.top = (y - 50) + 'px';
+            pressRing.style.width = '100px';
+            pressRing.style.height = '100px';
+            pressRing.classList.add('active');
+
+            longPressTimer = setTimeout(() => {
+                controlPanel.classList.add('active');
+                pressRing.classList.remove('active');
+            }, 1500);
+        });
+
+        document.addEventListener('touchend', function() {
+            clearTimeout(longPressTimer);
+            pressRing.classList.remove('active');
+        });
+
+        document.addEventListener('touchmove', function(e) {
+            const touch = e.touches[0];
+            const startX = parseInt(pressRing.style.left) + 50;
+            const startY = parseInt(pressRing.style.top) + 50;
+            const moveX = touch.clientX;
+            const moveY = touch.clientY;
+            const distance = Math.sqrt(Math.pow(moveX - startX, 2) + Math.pow(moveY - startY, 2));
+
+            if (distance > 30) {
+                clearTimeout(longPressTimer);
+                pressRing.classList.remove('active');
+            }
+        });
+
+        // ====================【8. 面板按钮功能】====================
+        toggleBtn.addEventListener('click', async () => {
+            isFlashlightOn ? await turnOffFlashlight() : await turnOnFlashlight();
+        });
+
+        toggleListeningBtn.addEventListener('click', toggleListening);
+
+        checkBtn.addEventListener('click', () => {
+            checkAndExecuteCommand();
+        });
+
+        closePanelBtn.addEventListener('click', () => {
+            controlPanel.classList.remove('active');
+        });
+
+        // ====================【9. 手电筒控制】====================
+        function updateStatusLed(isActive) {
+            statusLed.classList.toggle('active', isActive);
+        }
+
+        async function turnOnFlashlight() {
+            if (isFlashlightOn) return;
+            
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                track = mediaStream.getVideoTracks()[0];
+                if (!track.getCapabilities().torch) {
+                    alert('您的设备不支持闪光灯功能。');
+                    return;
+                }
+                await track.applyConstraints({ advanced: [{ torch: true }] });
+                isFlashlightOn = true;
+                updateStatusLed(true);
+                toggleBtn.textContent = '关闭手电筒';
+            } catch (error) {
+                console.error('开启失败:', error);
+                alert('开启失败: ' + error.message);
+            }
+        }
+
+        async function turnOffFlashlight() {
+            if (!isFlashlightOn || !track) return;
+            try {
+                await track.applyConstraints({ advanced: [{ torch: false }] });
+            } catch(e) { console.error(e); }
+            mediaStream.getTracks().forEach(t => t.stop());
+            mediaStream = null; track = null; isFlashlightOn = false;
+            updateStatusLed(false);
+            toggleBtn.textContent = '开启手电筒';
+        }
+
+        // ====================【10. 云端指令监听】====================
+        async function fetchCommandFromDynalist() {
+            if (!DYNALIST_DOCUMENT_ID || !TARGET_NODE_ID) return null;
+            try {
+                const response = await fetch('https://dynalist.io/api/v1/doc/read', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        token: DYNALIST_API_TOKEN, 
+                        file_id: DYNALIST_DOCUMENT_ID 
+                    })
+                });
+                const data = await response.json();
+                const targetNode = data.nodes?.find(n => n.id === TARGET_NODE_ID);
+                return targetNode?.content?.trim();
+            } catch(error) {
+                console.log('获取指令失败:', error);
+                return null;
+            }
+        }
+
+        async function checkAndExecuteCommand() {
+            if (!isListeningActive) return;
+            
+            const command = await fetchCommandFromDynalist();
+            if (!command) return;
+            console.log('收到指令:', command);
+            if (command === TARGET_COMMAND) {
+                await turnOnFlashlight();
+            } else if (isFlashlightOn) {
+                await turnOffFlashlight();
+            }
+        }
+
+        // ====================【11. 页面清理】====================
+        window.addEventListener('beforeunload', () => {
+            if (checkIntervalId) clearInterval(checkIntervalId);
+            turnOffFlashlight();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && isFlashlightOn) turnOffFlashlight();
+        });
+
+        // ====================【12. 主入口】====================
+        document.addEventListener('DOMContentLoaded', smartStart);
+    </script>
+</body>
+</html>
